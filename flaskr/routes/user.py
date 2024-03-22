@@ -75,16 +75,16 @@ def remove():
     
     username = request.json['username']
     
-    logger.info(username)
+    logger.info('username: ' + username)
     
     error = None
     
     db = get_db()
     user = db.execute(
         "SELECT * FROM user WHERE username = ?",
-        (username)
+        (username, )
     ).fetchone()
-    
+
     if user is None:
         error = f'User with username {username} doesn\'t exists.'
     
@@ -92,7 +92,7 @@ def remove():
         try:
             db.execute(
                 "DELETE FROM user WHERE id = ?",
-                (user['id'])
+                (user['id'], )
             )
             db.commit()
         except Exception as e:
