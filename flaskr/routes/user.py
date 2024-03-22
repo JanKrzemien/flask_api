@@ -13,7 +13,6 @@ def create():
     username = request.json['username']
     password = request.json['password']
     admin = request.json['admin']
-    user_id = str(uuid.uuid4())
     
     db = get_db()
     error = None
@@ -30,8 +29,8 @@ def create():
         
         try:
             db.execute(
-                "INSERT INTO user (public_id, username, password, admin) VALUES (?, ?, ?, ?)",
-                (user_id, username, generate_password_hash(password), admin)
+                "INSERT INTO user (username, password, admin) VALUES (?, ?, ?)",
+                (username, generate_password_hash(password), admin)
             )
             db.commit()
         except Exception as e:
@@ -39,8 +38,8 @@ def create():
             print(e)
             error = 'Error while creating user.'
         else:
-            logging.info("Created user {user_id}.")
-            return jsonify({'user_id': user_id})
+            logging.info("Created user {username}.")
+            return jsonify({'username': username})
     
     abort(400, description=error)
 
@@ -71,7 +70,9 @@ def login():
 
 @bp.route('/remove', methods=['DELETE'])
 def remove():
+    #TODO add jwt authorization with admin privilages
     pass
+    
 
 @bp.route('/update', methods=['PATCH'])
 def update():
