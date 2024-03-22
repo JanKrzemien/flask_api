@@ -1,41 +1,57 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, abort
 from werkzeug.security import check_password_hash, generate_password_hash
 from flaskr.db import get_db
 import uuid
+import logging
 
 bp = Blueprint('/user', __name__, url_prefix='/user')
 
-@bp.route('/create', methods=('GET', 'POST'))
+@bp.route('/create', methods=['POST'])
 def create():
-    #TODO check jwt token and check it for admin == true
+    #TODO add jwt authorization with admin privilages
     
-    if request.method == 'POST':
-        username = request.json['username']
-        password = request.json['password']
-        admin = request.json['admin']
+    username = request.json['username']
+    password = request.json['password']
+    admin = request.json['admin']
+    user_id = str(uuid.uuid4())
+    
+    db = get_db()
+    error = None
+    
+    if not username:
+        error = 'Username is required.'
+    elif not password:
+        error = 'Password is required.'
+    elif not admin:
+        error = 'Specify whether this user is admin.'
+    
+    if error is None:
+        admin = 1 if admin == 'True' else 0
         
-        db = get_db()
-        error = None
-        
-        if not username:
-            error = 'Username is required.'
-        elif not password:
-            error = 'Password is required.'
-        elif not admin:
-            error = 'Specify whether this user is admin.'
-        
-        if error is None:
-            try:
-                db.execute(
-                    "INSERT"
-                )
-            except:
-                pass
+        try:
+            db.execute(
+                "INSERT INTO user (public_id, username, password, admin) VALUES (?, ?, ?, ?)",
+                (user_id, username, generate_password_hash(password), admin)
+            )
+            db.commit()
+        except Exception as e:
+            logging.error('Error while creating user.')
+            print(e)
+            error = 'Error while creating user.'
+        else:
+            logging.info("Created user {user_id}.")
+            return jsonify({'user_id': user_id})
+    
+    abort(400, description=error)
 
-@bp.route('remove', methods=['DELETE'])
+@bp.route('/login', methods=['POST'])
+def login():
+    pass
+
+@bp.route('/remove', methods=['DELETE'])
 def remove():
     pass
 
-@bp.route('update', methods=['PATCH'])
+@bp.route('/update', methods=['PATCH'])
 def update():
     pass

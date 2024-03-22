@@ -19,11 +19,5 @@ logger_config = {
 def configure_logger(config):
     try:
         dictConfig(config)
-    except ValueError:
-        raise ValueError
-    except TypeError:
-        raise TypeError
-    except AttributeError:
-        raise AttributeError
-    except ImportError:
-        raise ImportError
+    except Exception as e:
+        print(e)

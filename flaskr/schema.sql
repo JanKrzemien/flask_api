@@ -9,7 +9,7 @@ CREATE TABLE user (
   public_id VARCHAR(50) NOT NULL UNIQUE,
   username TEXT UNIQUE NOT NULL,
   password TEXT NOT NULL,
-  admin BOOLEAN NOT NULL
+  admin BIT NOT NULL
 );
 
 CREATE TABLE location (

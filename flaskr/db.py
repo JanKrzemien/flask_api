@@ -1,6 +1,7 @@
 import sqlite3
 import click
 from flask import current_app, g
+import logging
 
 def get_db():
     """connects to database if connection wasn't established yet
@@ -25,22 +26,17 @@ def close_db(e=None):
     if db is not None:
         db.close()
 
-
+@click.command('init-db')
 def init_db():
     """create db from sql script file"""
     db = get_db()
     
     with current_app.open_resource('schema.sql') as file:
         db.executescript(file.read().decode('utf8'))
-
-
-@click.command('init-db')
-def init_db_command():
-    """Clear the existing data and create new tables."""
-    init_db()
-    click.echo('Initialized the database.')
-
+    
+    logging.info('Initialized the database.')
+    
 
 def init_app(app):
     app.teardown_appcontext(close_db)
-    app.cli.add_command(init_db_command)
+    app.cli.add_command(init_db)
