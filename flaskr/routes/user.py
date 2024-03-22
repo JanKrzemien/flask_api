@@ -1,8 +1,7 @@
 from flask import Blueprint, request, jsonify, abort
 from werkzeug.security import check_password_hash, generate_password_hash
 from flaskr.db import get_db
-import uuid
-import logging
+from ..error_handling.logger import logger
 
 bp = Blueprint('/user', __name__, url_prefix='/user')
 
@@ -34,13 +33,13 @@ def create():
             )
             db.commit()
         except Exception as e:
-            logging.error('Error while creating user.')
             print(e)
             error = 'Error while creating user.'
         else:
-            logging.info("Created user {username}.")
+            logger.info("Created user {username}.")
             return jsonify({'username': username})
     
+    logger.error('Error while creating user.')
     abort(400, description=error)
 
 @bp.route('/login', methods=['POST'])
@@ -63,7 +62,9 @@ def login():
     
     if error is None:
         #TODO generate JWT with given priviliges
-        pass
+        logger.info('User logged in.')
+    
+    logger.info('User failed to log in.')
     
     abort(400, description=error)
         
@@ -71,7 +72,36 @@ def login():
 @bp.route('/remove', methods=['DELETE'])
 def remove():
     #TODO add jwt authorization with admin privilages
-    pass
+    
+    username = request.json['username']
+    
+    logger.info(username)
+    
+    error = None
+    
+    db = get_db()
+    user = db.execute(
+        "SELECT * FROM user WHERE username = ?",
+        (username)
+    ).fetchone()
+    
+    if user is None:
+        error = f'User with username {username} doesn\'t exists.'
+    
+    if error is None:
+        try:
+            db.execute(
+                "DELETE FROM user WHERE id = ?",
+                (user['id'])
+            )
+            db.commit()
+        except Exception as e:
+            logger.error(e)
+            error = f"Error while deleting user with username {username}."
+        else:
+            return jsonify({'username': username})
+    
+    return abort(400, description=error)
     
 
 @bp.route('/update', methods=['PATCH'])

@@ -1,7 +1,7 @@
 import sqlite3
 import click
 from flask import current_app, g
-import logging
+from .error_handling.logger import logger
 
 def get_db():
     """connects to database if connection wasn't established yet
@@ -34,7 +34,7 @@ def init_db():
     with current_app.open_resource('schema.sql') as file:
         db.executescript(file.read().decode('utf8'))
     
-    logging.info('Initialized the database.')
+    logger.info('Initialized the database.')
     
 
 def init_app(app):
