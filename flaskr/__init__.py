@@ -5,8 +5,13 @@ should be treated as a package
 import os
 
 from flask import Flask
+from logging.config import fileConfig
 
 def create_app(test_config=None):
+    # configure logger
+    from .error_handling.logger import logger_config, configure_logger
+    configure_logger(logger_config)
+
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_mapping(
@@ -30,7 +35,10 @@ def create_app(test_config=None):
     from . import db
     db.init_app(app)
     
-    from . import auth
+    from .routes import auth
     app.register_blueprint(auth.bp)
+    
+    from .routes import user
+    app.register_blueprint(user.bp)
     
     return app
