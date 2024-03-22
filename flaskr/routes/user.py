@@ -46,7 +46,28 @@ def create():
 
 @bp.route('/login', methods=['POST'])
 def login():
-    pass
+    username = request.json['username']
+    password = request.json['password']
+    
+    error = None
+    
+    db = get_db()
+    user = db.execute(
+        "SELECT * FROM user WHERE username = ?",
+        (username)
+    ).fetchone()
+    
+    if user is None:
+        error = f'User with username {username} doesn\'t exist.'
+    elif not check_password_hash(user['password'], password):
+        error = 'Incorrect password.'
+    
+    if error is None:
+        #TODO generate JWT with given priviliges
+        pass
+    
+    abort(400, description=error)
+        
 
 @bp.route('/remove', methods=['DELETE'])
 def remove():
