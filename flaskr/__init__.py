@@ -6,6 +6,8 @@ import os
 
 from flask import Flask
 
+from .config import DevelopmentConfig
+
 def create_app(test_config=None):
     # configure logger
     from .error_handling.logger import configure_logger, logger
@@ -23,7 +25,7 @@ def create_app(test_config=None):
     
     if test_config is None:
         # load the instance config, if it exists, when not testing
-        app.config.from_pyfile('config.py', silent=True)
+        app.config.from_object(DevelopmentConfig())
         logger.info('Loaded configuration.')
     else:
         # load the test config if passed in

@@ -1,7 +1,9 @@
-from flask import Blueprint, request, jsonify, abort
+from flask import Blueprint, request, jsonify, current_app
 from werkzeug.security import check_password_hash, generate_password_hash
 from flaskr.db import get_db
 from ..error_handling.logger import logger
+
+import jwt
 
 bp = Blueprint('/user', __name__, url_prefix='/user')
 
@@ -40,7 +42,23 @@ def create():
             return jsonify({'username': username})
     
     logger.error('Error while creating user.')
-    abort(400, description=error)
+    return jsonify({
+        "code": 400,
+        "error": error
+    })
+
+def create_token(username, admin_privs, token_type, expires = None):
+    payload_data = {
+                'token_type': token_type,
+                'username': username,
+                'admin': admin_privs
+    }
+    if expires is not None:
+        payload_data['expires'] = expires
+    return jwt.encode(
+            key=current_app.config['SECRET_KEY'],
+            payload=payload_data
+    )
 
 @bp.route('/login', methods=['POST'])
 def login():
@@ -52,7 +70,7 @@ def login():
     db = get_db()
     user = db.execute(
         "SELECT * FROM user WHERE username = ?",
-        (username)
+        (username, )
     ).fetchone()
     
     if user is None:
@@ -61,12 +79,18 @@ def login():
         error = 'Incorrect password.'
     
     if error is None:
-        #TODO generate JWT with given priviliges
-        logger.info('User logged in.')
+        logger.info('User logged in. Generating tokens')
+        return jsonify({
+            'token': create_token(user['username'], user['admin'], current_app.config['ACCESS_TOKEN_TYPE'], current_app.config['TOKEN_EXPIRATION']),
+            'refresh_token': create_token(user['username'], user['admin'], current_app.config['REFRESH_TOKEN_TYPE'])
+        })
     
     logger.info('User failed to log in.')
     
-    abort(400, description=error)
+    return jsonify({
+        "code": 400,
+        "error": error
+    })
         
 
 @bp.route('/remove', methods=['DELETE'])
@@ -101,9 +125,20 @@ def remove():
         else:
             return jsonify({'username': username})
     
-    return abort(400, description=error)
+    return jsonify({
+        "code": 400,
+        "error": error
+    })
     
 
 @bp.route('/update', methods=['PATCH'])
 def update():
+    pass
+
+@bp.route('/refresh', methods=['POST'])
+def refresh_token():
+    pass
+
+@bp.route('/newsecret', method=['PATCH'])
+def change_secret_key():
     pass
