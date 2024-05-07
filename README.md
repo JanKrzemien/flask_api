@@ -1,9 +1,7 @@
 # dependencies
-Flask==3.0.2
-flask_sqlalchemy==3.1.1
-SQLAlchemy==2.0.27
+dependencies are listed in requirements.txt file, that is hopefuly up to date.
 
 # running application
-create and activate virtualenv.
-install dependencies.
-run app.py file.
+create and activate virtualenv
+install dependencies from requirements.txt file
+run project with command 'flask --app flaskr run'

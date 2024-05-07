@@ -7,18 +7,53 @@ import jwt
 
 bp = Blueprint('/user', __name__, url_prefix='/user')
 
+from enum import Enum
+class HTTP_STATUS_CODE(Enum):
+    OK = 200
+    BAD_REQUEST = 400
+    UNAUTHORIZED = 401
+
+def token_is_valid(token):
+    pass
+
+def user_is_admin(token):
+    pass
+
+def create_token(username, admin_privs, token_type, expires = None):
+    payload_data = {
+                'token_type': token_type,
+                'username': username,
+                'admin': admin_privs
+    }
+    if expires is not None:
+        payload_data['expires'] = expires
+    return jwt.encode(
+            key=current_app.config['SECRET_KEY'],
+            payload=payload_data
+    )
+
 @bp.route('/create', methods=['POST'])
 def create():
     #TODO add jwt authorization with admin privilages
     
+    token = request.json['token']
     username = request.json['username']
     password = request.json['password']
     admin = request.json['admin']
     
     db = get_db()
     error = None
+    status_code = HTTP_STATUS_CODE.BAD_REQUEST
     
-    if not username:
+    if not token:
+        error = 'Token is required.'
+    elif not token_is_valid(token):
+        error = 'Token is not valid.'
+        status_code = HTTP_STATUS_CODE.UNAUTHORIZED
+    elif not user_is_admin(token):
+        error = 'User don\'t have permision top perform this operation.'
+        status_code = HTTP_STATUS_CODE.UNAUTHORIZED
+    elif not username:
         error = 'Username is required.'
     elif not password:
         error = 'Password is required.'
@@ -43,22 +78,9 @@ def create():
     
     logger.error('Error while creating user.')
     return jsonify({
-        "code": 400,
+        "code": status_code,
         "error": error
     })
-
-def create_token(username, admin_privs, token_type, expires = None):
-    payload_data = {
-                'token_type': token_type,
-                'username': username,
-                'admin': admin_privs
-    }
-    if expires is not None:
-        payload_data['expires'] = expires
-    return jwt.encode(
-            key=current_app.config['SECRET_KEY'],
-            payload=payload_data
-    )
 
 @bp.route('/login', methods=['POST'])
 def login():
@@ -66,6 +88,7 @@ def login():
     password = request.json['password']
     
     error = None
+    status_code = HTTP_STATUS_CODE.BAD_REQUEST
     
     db = get_db()
     user = db.execute(
@@ -88,7 +111,7 @@ def login():
     logger.info('User failed to log in.')
     
     return jsonify({
-        "code": 400,
+        "code": status_code,
         "error": error
     })
         
@@ -139,6 +162,6 @@ def update():
 def refresh_token():
     pass
 
-@bp.route('/newsecret', method=['PATCH'])
+@bp.route('/newsecret', methods=['PATCH'])
 def change_secret_key():
     pass
