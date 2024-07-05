@@ -3,70 +3,29 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from flaskr.db import get_db
 from ..error_handling.logger import logger
 
-import jwt
+from ..jwt_token import create_token, is_jwt_valid
+from ..auth import auth_token_with_admin_privs, HTTP_STATUS_CODE, generate_random_secret_key
 
 bp = Blueprint('/user', __name__, url_prefix='/user')
 
-from enum import Enum
-class HTTP_STATUS_CODE(Enum):
-    OK = 200
-    BAD_REQUEST = 400
-    UNAUTHORIZED = 401
-
-def token_is_valid(token):
-    pass
-
-def user_is_admin(token):
-    pass
-
-def create_token(username, admin_privs, token_type, expires = None):
-    payload_data = {
-                'token_type': token_type,
-                'username': username,
-                'admin': admin_privs
-    }
-    if expires is not None:
-        payload_data['expires'] = expires
-    return jwt.encode(
-            key=current_app.config['SECRET_KEY'],
-            payload=payload_data
-    )
-
 @bp.route('/create', methods=['POST'])
-def create():
-    #TODO add jwt authorization with admin privilages
-    
+def create():    
     token = request.json['token']
     username = request.json['username']
     password = request.json['password']
     admin = request.json['admin']
     
-    db = get_db()
-    error = None
-    status_code = HTTP_STATUS_CODE.BAD_REQUEST
+    error, status_code = auth_token_with_admin_privs(token, [username, password, admin])
     
-    if not token:
-        error = 'Token is required.'
-    elif not token_is_valid(token):
-        error = 'Token is not valid.'
-        status_code = HTTP_STATUS_CODE.UNAUTHORIZED
-    elif not user_is_admin(token):
-        error = 'User don\'t have permision top perform this operation.'
-        status_code = HTTP_STATUS_CODE.UNAUTHORIZED
-    elif not username:
-        error = 'Username is required.'
-    elif not password:
-        error = 'Password is required.'
-    elif not admin:
-        error = 'Specify whether this user is admin.'
+    db = get_db()
     
     if error is None:
         admin = 1 if admin == 'True' else 0
         
         try:
             db.execute(
-                "INSERT INTO user (username, password, admin) VALUES (?, ?, ?)",
-                (username, generate_password_hash(password), admin)
+                "INSERT INTO user (username, password, admin, refresh_secret_key) VALUES (?, ?, ?)",
+                (username, generate_password_hash(password), admin, generate_random_secret_key())
             )
             db.commit()
         except Exception as e:
@@ -104,28 +63,32 @@ def login():
     if error is None:
         logger.info('User logged in. Generating tokens')
         return jsonify({
-            'token': create_token(user['username'], user['admin'], current_app.config['ACCESS_TOKEN_TYPE'], current_app.config['TOKEN_EXPIRATION']),
-            'refresh_token': create_token(user['username'], user['admin'], current_app.config['REFRESH_TOKEN_TYPE'])
+            'token': create_token(user['username'], user['admin'], current_app.config['ACCESS_TOKEN_TYPE'], current_app.config['SECRET_KEY'], current_app.config['TOKEN_EXPIRATION']),
+            'refresh_token': create_token(user['username'], user['admin'], current_app.config['REFRESH_TOKEN_TYPE'], user['refresh_secret_key'], None)
         })
-    
-    logger.info('User failed to log in.')
-    
-    return jsonify({
-        "code": status_code,
-        "error": error
-    })
+    else:
+        logger.info('User failed to log in.')
+        return jsonify({
+            "code": status_code,
+            "error": error
+        })
         
 
 @bp.route('/remove', methods=['DELETE'])
 def remove():
-    #TODO add jwt authorization with admin privilages
-    
+    token = request.json['token']
     username = request.json['username']
+        
+    error, status_code = auth_token_with_admin_privs(token, [username])
     
-    logger.info('username: ' + username)
+    if error is not None:
+        return jsonify({
+            "code": status_code,
+            "error": error
+        })
     
-    error = None
-    
+    logger.info('removing user ' + username)
+        
     db = get_db()
     user = db.execute(
         "SELECT * FROM user WHERE username = ?",
@@ -134,6 +97,7 @@ def remove():
 
     if user is None:
         error = f'User with username {username} doesn\'t exists.'
+        status_code = HTTP_STATUS_CODE.USER_NOT_FOUND
     
     if error is None:
         try:
@@ -149,19 +113,40 @@ def remove():
             return jsonify({'username': username})
     
     return jsonify({
-        "code": 400,
+        "code": status_code,
         "error": error
     })
-    
-
-@bp.route('/update', methods=['PATCH'])
-def update():
-    pass
 
 @bp.route('/refresh', methods=['POST'])
 def refresh_token():
-    pass
+    refresh_token = request.json['refresh_token']
+    username = request.json['username']
+    
+    if not username or not refresh_token:
+        return jsonify({
+            "code": HTTP_STATUS_CODE.BAD_REQUEST,
+            "error": "not enough arguments"
+        })
+    
+    db = get_db()
+    user = db.execute(
+        "SELECT * FROM user WHERE username = ?",
+        (username, )
+    ).fetchone()
+    
+    validation, decoded_token = is_jwt_valid(refresh_token, user['refresh_secret_key'])
+    
+    if not validation:
+        return jsonify({
+            "code": HTTP_STATUS_CODE.UNAUTHORIZED,
+            "error": "token not valid or expired"
+        })
+    
+    #TODO update user refresh secret key
+    
+    #TODO generate new token and new refresh token based on new refresh secret key
+    
 
 @bp.route('/newsecret', methods=['PATCH'])
 def change_secret_key():
-    pass
+    pass #TODO changing secrec key in currentapp config
