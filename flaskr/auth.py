@@ -7,6 +7,7 @@ class HTTP_STATUS_CODE:
     BAD_REQUEST = 400
     UNAUTHORIZED = 401
     USER_NOT_FOUND = 404
+    INTERNAL_SERVER_ERROR = 500
 
 def auth_token_with_admin_privs(token, args):
     error = None

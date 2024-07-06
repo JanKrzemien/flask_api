@@ -142,11 +142,36 @@ def refresh_token():
             "error": "token not valid or expired"
         })
     
-    #TODO update user refresh secret key
-    
-    #TODO generate new token and new refresh token based on new refresh secret key
-    
+    new_refresh_secret_key = generate_random_secret_key()
+    try:
+        db.execute(
+            "UPDATE user SET refresh_secret_key = ? WHERE id = ?",
+            (new_refresh_secret_key, user['id'])
+        )
+        db.commit()
+    except Exception as e:
+        logger.error(e)
+        return jsonify({
+            "code": HTTP_STATUS_CODE.INTERNAL_SERVER_ERROR,
+            "error": f"Error while updating user with username {username}."
+        })
+    else:
+        return jsonify({
+            'token': create_token(user['username'], user['admin'], current_app.config['ACCESS_TOKEN_TYPE'], current_app.config['SECRET_KEY'], current_app.config['TOKEN_EXPIRATION']),
+            'refresh_token': create_token(user['username'], user['admin'], current_app.config['REFRESH_TOKEN_TYPE'], new_refresh_secret_key, None)
+        })    
 
 @bp.route('/newsecret', methods=['PATCH'])
 def change_secret_key():
-    pass #TODO changing secrec key in currentapp config
+    token = request.json['token']
+    secret = request.json['secret']
+    
+    error, status_code = auth_token_with_admin_privs(token, [secret])
+    
+    if error is not None:
+        return jsonify({
+            "code": status_code,
+            "error": error
+        })
+    
+    current_app.config['SECRET_KEY'] = secret
