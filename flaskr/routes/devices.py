@@ -4,7 +4,7 @@ from ..error_handling.logger import logger
 
 from ..auth import auth_token, HTTP_STATUS_CODE
 
-bp = Blueprint('/model', __name__, url_prefix='/model')
+bp = Blueprint('/devices', __name__, url_prefix='/devices')
 
 @bp.route('/add', methods=['POST'])
 def add():

@@ -9,7 +9,18 @@ class HTTP_STATUS_CODE:
     USER_NOT_FOUND = 404
     INTERNAL_SERVER_ERROR = 500
 
-def auth_token_with_admin_privs(token, args):
+def auth_token(token, args, check_for_admin_privs: bool):
+    """function checks if arguments are not None, if jwt token is valid
+    and based on check_for_admin_privs whether token has admin privs
+
+    Args:
+        token: jwt token
+        args: list of arguments
+        check_for_admin_privs (bool): whether token should have admin privilages
+
+    Returns:
+        error, status_code: error is None, if there is no error
+    """
     error = None
     status_code = HTTP_STATUS_CODE.BAD_REQUEST
     
@@ -22,7 +33,7 @@ def auth_token_with_admin_privs(token, args):
     elif not validation:
         error = 'Token is not valid.'
         status_code = HTTP_STATUS_CODE.UNAUTHORIZED
-    elif not is_user_an_admin(decoded_token) or not is_access_token(decoded_token): # user needs to have admin privilages to add user
+    elif (check_for_admin_privs and not is_user_an_admin(decoded_token)) or not is_access_token(decoded_token): # user needs to have admin privilages to add user
         error = 'User don\'t have permision top perform this operation.'
         status_code = HTTP_STATUS_CODE.UNAUTHORIZED
     

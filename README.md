@@ -16,4 +16,5 @@ class DevelopmentConfig(Config):
     REFRESH_TOKEN_TYPE='refresh_token'
 ```
 
+- initialize database with command 'flask --app flaskr init-db'
 - run project with command 'flask --app flaskr run'

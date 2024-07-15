@@ -1,5 +1,4 @@
 DROP TABLE IF EXISTS device;
-DROP TABLE IF EXISTS location;
 DROP TABLE IF EXISTS status;
 DROP TABLE IF EXISTS model;
 DROP TABLE IF EXISTS user;
@@ -10,12 +9,6 @@ CREATE TABLE user (
   password TEXT NOT NULL,
   admin BIT NOT NULL,
   refresh_secret_key TEXT UNIQUE NOT NULL
-);
-
-CREATE TABLE location (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    latitude DECIMAL(23, 20),
-    longitude FLOAT(23, 20)
 );
 
 CREATE TABLE status (
@@ -38,9 +31,9 @@ CREATE TABLE device (
     last_serviced DATE,
     battery DECIMAL(2, 2),
     status_id INTEGER NOT NULL,
-    location_id INTEGER,
     other_info VARCHAR(200),
+    latitude DECIMAL(23, 20),
+    longitude FLOAT(23, 20),
     FOREIGN KEY (model_id) REFERENCES model (id),
-    FOREIGN KEY (status_id) REFERENCES status (id),
-    FOREIGN KEY (location_id) REFERENCES location (id)
+    FOREIGN KEY (status_id) REFERENCES status (id)
 );

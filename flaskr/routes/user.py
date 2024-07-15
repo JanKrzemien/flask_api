@@ -4,18 +4,18 @@ from flaskr.db import get_db
 from ..error_handling.logger import logger
 
 from ..jwt_token import create_token, is_jwt_valid
-from ..auth import auth_token_with_admin_privs, HTTP_STATUS_CODE, generate_random_secret_key
+from ..auth import auth_token, HTTP_STATUS_CODE, generate_random_secret_key
 
 bp = Blueprint('/user', __name__, url_prefix='/user')
 
 @bp.route('/create', methods=['POST'])
-def create():    
+def create():
     token = request.json['token']
     username = request.json['username']
     password = request.json['password']
     admin = request.json['admin']
     
-    error, status_code = auth_token_with_admin_privs(token, [username, password, admin])
+    error, status_code = auth_token(token, [username, password, admin], True)
     
     db = get_db()
     
@@ -79,7 +79,7 @@ def remove():
     token = request.json['token']
     username = request.json['username']
         
-    error, status_code = auth_token_with_admin_privs(token, [username])
+    error, status_code = auth_token(token, [username], True)
     
     if error is not None:
         return jsonify({
@@ -166,7 +166,7 @@ def change_secret_key():
     token = request.json['token']
     secret = request.json['secret']
     
-    error, status_code = auth_token_with_admin_privs(token, [secret])
+    error, status_code = auth_token(token, [secret], True)
     
     if error is not None:
         return jsonify({
