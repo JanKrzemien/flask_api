@@ -1,6 +1,5 @@
 DROP TABLE IF EXISTS device;
 DROP TABLE IF EXISTS status;
-DROP TABLE IF EXISTS model;
 DROP TABLE IF EXISTS user;
 
 CREATE TABLE user (
@@ -17,16 +16,8 @@ CREATE TABLE status (
     color VARCHAR(25) NOT NULL
 );
 
-CREATE TABLE model (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name VARCHAR(75) NOT NULL,
-    release_date DATE NOT NULL,
-    specs VARCHAR(1000)
-);
-
 CREATE TABLE device (
     serial_number VARCHAR(20) PRIMARY KEY,
-    model_id INTEGER NOT NULL,
     production_date DATE NOT NULL,
     last_serviced DATE,
     battery DECIMAL(2, 2),
@@ -34,6 +25,5 @@ CREATE TABLE device (
     other_info VARCHAR(200),
     latitude DECIMAL(23, 20),
     longitude FLOAT(23, 20),
-    FOREIGN KEY (model_id) REFERENCES model (id),
     FOREIGN KEY (status_id) REFERENCES status (id)
 );

@@ -6,6 +6,8 @@ from ..error_handling.logger import logger
 from ..jwt_token import create_token, is_jwt_valid
 from ..auth import auth_token, HTTP_STATUS_CODE, generate_random_secret_key
 
+from ..post_data import post_data_using_query
+
 bp = Blueprint('/user', __name__, url_prefix='/user')
 
 @bp.route('/create', methods=['POST'])
@@ -17,21 +19,14 @@ def create():
     
     error, status_code = auth_token(token, [username, password, admin], True)
     
-    db = get_db()
-    
     if error is None:
         admin = 1 if admin == 'True' else 0
         
-        try:
-            db.execute(
-                "INSERT INTO user (username, password, admin, refresh_secret_key) VALUES (?, ?, ?)",
-                (username, generate_password_hash(password), admin, generate_random_secret_key())
-            )
-            db.commit()
-        except Exception as e:
-            print(e)
-            error = 'Error while creating user.'
-        else:
+        error = post_data_using_query(
+            "INSERT INTO user (username, password, admin, refresh_secret_key) VALUES (?, ?, ?, ?)",
+            (username, generate_password_hash(password), admin, generate_random_secret_key())
+        )
+        if error is None:
             logger.info("Created user {username}.")
             return jsonify({'username': username})
     

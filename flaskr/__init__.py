@@ -41,11 +41,10 @@ def create_app(test_config=None):
     from . import db
     db.init_app(app)
     
-    from .routes import user, devices, status, model
+    from .routes import user, devices, status
     app.register_blueprint(user.bp)
     app.register_blueprint(devices.bp)
     app.register_blueprint(status.bp)
-    app.register_blueprint(model.bp)
     
     logger.info('Registered blueprints.')
     
