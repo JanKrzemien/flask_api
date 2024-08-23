@@ -1,12 +1,15 @@
 from flask import Blueprint, request, jsonify, current_app
-from werkzeug.security import check_password_hash, generate_password_hash
-from flaskr.db import get_db
+from werkzeug.security import generate_password_hash
 from ..error_handling.logger import logger
 
-from ..jwt_token import create_token, is_jwt_valid
-from ..auth import auth_token, HTTP_STATUS_CODE, generate_random_secret_key
-
-from ..post_data import post_data_using_query
+from ..jwt_token import create_token, decode_token
+from ..auth import check_if_data_is_not_None, auth_user, check_if_password_matching_with_hash, generate_random_secret_key
+from ..error_handling.exceptions import UNAUTHORIZED_EXCEPTION, DATA_NOT_FOUND_EXCEPTION, INTERNAL_ERROR_EXCEPTION
+from ..util import json_error, json_request_completed, get_admin_int_value
+from ..operations_on_data.get_data import get_user_by_username
+from ..operations_on_data.delete_data import delete_user_by_id
+from ..operations_on_data.update_data import update_users_refresh_secret_key
+from ..operations_on_data.post_data import post_data_using_query
 
 bp = Blueprint('/user', __name__, url_prefix='/user')
 
@@ -17,156 +20,86 @@ def create():
     password = request.json['password']
     admin = request.json['admin']
     
-    error, status_code = auth_token(token, [username, password, admin], True)
-    
-    if error is None:
-        admin = 1 if admin == 'True' else 0
-        
-        error = post_data_using_query(
+    try:
+        check_if_data_is_not_None([token, username, password, admin])
+        auth_user(token, check_for_admin_privs=True)
+        admin = get_admin_int_value(admin)
+        post_data_using_query(
             "INSERT INTO user (username, password, admin, refresh_secret_key) VALUES (?, ?, ?, ?)",
             (username, generate_password_hash(password), admin, generate_random_secret_key())
         )
-        if error is None:
-            logger.info("Created user {username}.")
-            return jsonify({'username': username})
+    except UNAUTHORIZED_EXCEPTION or DATA_NOT_FOUND_EXCEPTION or INTERNAL_ERROR_EXCEPTION as ex:
+        logger.error(f'{ex.error}\n{ex}')
+        return json_error(ex.error, ex.status_code)
     
-    logger.error('Error while creating user.')
-    return jsonify({
-        "code": status_code,
-        "error": error
-    })
+    return json_request_completed()
 
 @bp.route('/login', methods=['POST'])
 def login():
     username = request.json['username']
     password = request.json['password']
     
-    error = None
-    status_code = HTTP_STATUS_CODE.BAD_REQUEST
-    
-    db = get_db()
-    user = db.execute(
-        "SELECT * FROM user WHERE username = ?",
-        (username, )
-    ).fetchone()
-    
-    if user is None:
-        error = f'User with username {username} doesn\'t exist.'
-    elif not check_password_hash(user['password'], password):
-        error = 'Incorrect password.'
-    
-    if error is None:
+    try:
+        check_if_data_is_not_None([username, password])
+        user = get_user_by_username(username)
+        check_if_password_matching_with_hash(user['password'], password)
+        token = create_token(user['username'], user['admin'], current_app.config['ACCESS_TOKEN_TYPE'], current_app.config['SECRET_KEY'], current_app.config['TOKEN_EXPIRATION'])
+        refresh_token = create_token(user['username'], user['admin'], current_app.config['REFRESH_TOKEN_TYPE'], user['refresh_secret_key'], None)
         logger.info('User logged in. Generating tokens')
         return jsonify({
-            'token': create_token(user['username'], user['admin'], current_app.config['ACCESS_TOKEN_TYPE'], current_app.config['SECRET_KEY'], current_app.config['TOKEN_EXPIRATION']),
-            'refresh_token': create_token(user['username'], user['admin'], current_app.config['REFRESH_TOKEN_TYPE'], user['refresh_secret_key'], None)
+            'token': token,
+            'refresh_token': refresh_token
         })
-    else:
-        logger.info('User failed to log in.')
-        return jsonify({
-            "code": status_code,
-            "error": error
-        })
+    except DATA_NOT_FOUND_EXCEPTION or UNAUTHORIZED_EXCEPTION or INTERNAL_ERROR_EXCEPTION as ex:
+        return json_error(ex.error, ex.status_code)
         
 
 @bp.route('/remove', methods=['DELETE'])
 def remove():
     token = request.json['token']
     username = request.json['username']
-        
-    error, status_code = auth_token(token, [username], True)
     
-    if error is not None:
-        return jsonify({
-            "code": status_code,
-            "error": error
-        })
+    try:
+        check_if_data_is_not_None([token, username])
+        auth_user(token, check_for_admin_privs=True)
+        user = get_user_by_username(username)
+        delete_user_by_id(user['id'])
+    except DATA_NOT_FOUND_EXCEPTION or UNAUTHORIZED_EXCEPTION as ex:
+        logger.error(ex.error)
+        return json_error(ex.error, ex.status_code)
     
-    logger.info('removing user ' + username)
-        
-    db = get_db()
-    user = db.execute(
-        "SELECT * FROM user WHERE username = ?",
-        (username, )
-    ).fetchone()
-
-    if user is None:
-        error = f'User with username {username} doesn\'t exists.'
-        status_code = HTTP_STATUS_CODE.USER_NOT_FOUND
-    
-    if error is None:
-        try:
-            db.execute(
-                "DELETE FROM user WHERE id = ?",
-                (user['id'], )
-            )
-            db.commit()
-        except Exception as e:
-            logger.error(e)
-            error = f"Error while deleting user with username {username}."
-        else:
-            return jsonify({'username': username})
-    
-    return jsonify({
-        "code": status_code,
-        "error": error
-    })
+    return json_request_completed()
 
 @bp.route('/refresh', methods=['POST'])
 def refresh_token():
     refresh_token = request.json['refresh_token']
     username = request.json['username']
     
-    if not username or not refresh_token:
-        return jsonify({
-            "code": HTTP_STATUS_CODE.BAD_REQUEST,
-            "error": "not enough arguments"
-        })
-    
-    db = get_db()
-    user = db.execute(
-        "SELECT * FROM user WHERE username = ?",
-        (username, )
-    ).fetchone()
-    
-    validation, decoded_token = is_jwt_valid(refresh_token, user['refresh_secret_key'])
-    
-    if not validation:
-        return jsonify({
-            "code": HTTP_STATUS_CODE.UNAUTHORIZED,
-            "error": "token not valid or expired"
-        })
-    
-    new_refresh_secret_key = generate_random_secret_key()
     try:
-        db.execute(
-            "UPDATE user SET refresh_secret_key = ? WHERE id = ?",
-            (new_refresh_secret_key, user['id'])
-        )
-        db.commit()
-    except Exception as e:
-        logger.error(e)
+        check_if_data_is_not_None([refresh_token, username])
+        user = get_user_by_username(username)
+        decode_token(refresh_token, user['refresh_secret_key'])
+        new_refresh_secret_key = generate_random_secret_key()
+        update_users_refresh_secret_key(new_refresh_secret_key, user['id'])
+        new_token = create_token(user['username'], user['admin'], current_app.config['ACCESS_TOKEN_TYPE'], current_app.config['SECRET_KEY'], current_app.config['TOKEN_EXPIRATION'])
+        new_refresh_token = create_token(user['username'], user['admin'], current_app.config['REFRESH_TOKEN_TYPE'], new_refresh_secret_key, None)
         return jsonify({
-            "code": HTTP_STATUS_CODE.INTERNAL_SERVER_ERROR,
-            "error": f"Error while updating user with username {username}."
+            'token': new_token,
+            'refresh_token': new_refresh_token 
         })
-    else:
-        return jsonify({
-            'token': create_token(user['username'], user['admin'], current_app.config['ACCESS_TOKEN_TYPE'], current_app.config['SECRET_KEY'], current_app.config['TOKEN_EXPIRATION']),
-            'refresh_token': create_token(user['username'], user['admin'], current_app.config['REFRESH_TOKEN_TYPE'], new_refresh_secret_key, None)
-        })    
+    except DATA_NOT_FOUND_EXCEPTION or UNAUTHORIZED_EXCEPTION or INTERNAL_ERROR_EXCEPTION as ex:
+        return json_error(ex.error, ex.status_code)
 
 @bp.route('/newsecret', methods=['PATCH'])
 def change_secret_key():
     token = request.json['token']
     secret = request.json['secret']
     
-    error, status_code = auth_token(token, [secret], True)
-    
-    if error is not None:
-        return jsonify({
-            "code": status_code,
-            "error": error
-        })
-    
-    current_app.config['SECRET_KEY'] = secret
+    try:
+        check_if_data_is_not_None([token, secret])
+        auth_user(token, check_for_admin_privs=True)
+        current_app.config['SECRET_KEY'] = secret
+        logger.info('Global secret key has been changed.')
+    except DATA_NOT_FOUND_EXCEPTION or UNAUTHORIZED_EXCEPTION as ex:
+        logger.error('Error while changing global secret key.')
+        return json_error(ex.error, ex.status_code)

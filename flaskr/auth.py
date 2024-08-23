@@ -1,48 +1,53 @@
+from werkzeug.security import check_password_hash
+
 from .error_handling.logger import logger
-from .jwt_token import is_jwt_valid, is_user_an_admin, is_access_token
+from .jwt_token import decode_token, is_user_an_admin, is_access_token
 import string, secrets
+from .error_handling.exceptions import DATA_NOT_FOUND_EXCEPTION, UNAUTHORIZED_EXCEPTION
 
-class HTTP_STATUS_CODE:
-    OK = 200
-    BAD_REQUEST = 400
-    UNAUTHORIZED = 401
-    USER_NOT_FOUND = 404
-    INTERNAL_SERVER_ERROR = 500
+def check_if_data_is_not_None(args: list) -> None:
+    """checks if any of the args is None, raises custom exception when is
 
-def auth_token(token, args, check_for_admin_privs: bool):
-    """function checks if arguments are not None, if jwt token is valid
+    Args:
+        args (list): list of args to get checked
+
+    Raises:
+        DATA_NOT_FOUND_EXCEPTION: Raised with custom error field to indicate that value is None
+    """
+    
+    for arg in args:
+        if not arg:
+            raise DATA_NOT_FOUND_EXCEPTION(error='Data is None when it shouldn\'t be.')
+            
+
+def auth_user(token, check_for_admin_privs: bool) -> None:
+    """function checks if jwt token is valid
     and based on check_for_admin_privs whether token has admin privs
 
     Args:
         token: jwt token
-        args: list of arguments
         check_for_admin_privs (bool): whether token should have admin privilages
 
-    Returns:
-        error, status_code: error is None, if there is no error
+    Raises:
+        DATA_NOT_FOUND_EXCEPTION: token is None and user cannot be authorized
+        UNAUTHORIZED_EXCEPTION: error while decoding token, token is not a access token, user doesn't have admin privilages and cannot be authorized
     """
-    error = None
-    status_code = HTTP_STATUS_CODE.BAD_REQUEST
-    
-    validation, decoded_token = is_jwt_valid(token)
+    decoded_token = decode_token(token)
     
     logger.info('decoded token ' + str(decoded_token))
     
     if not token:
-        error = 'Token is required.'
-    elif not validation:
-        error = 'Token is not valid.'
-        status_code = HTTP_STATUS_CODE.UNAUTHORIZED
-    elif (check_for_admin_privs and not is_user_an_admin(decoded_token)) or not is_access_token(decoded_token): # user needs to have admin privilages to add user
-        error = 'User don\'t have permision top perform this operation.'
-        status_code = HTTP_STATUS_CODE.UNAUTHORIZED
-    
-    for arg in args:
-        if not arg:
-            error = 'not enough arguments'
-    
-    return error, status_code
+        raise DATA_NOT_FOUND_EXCEPTION(error='Token is required.')
+    elif not decoded_token:
+        raise UNAUTHORIZED_EXCEPTION(error='Token is not valid.')
+    elif (check_for_admin_privs and not is_user_an_admin(decoded_token)) or not is_access_token(decoded_token):
+        raise UNAUTHORIZED_EXCEPTION(error='User don\'t have permision top perform this operation.')
 
 def generate_random_secret_key(length=32):
     alphabet = string.ascii_letters + string.digits + string.punctuation
     return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+def check_if_password_matching_with_hash(passwords_hash: str, password_delivered_by_user: str) -> None:
+    if not check_password_hash(passwords_hash, password_delivered_by_user):
+        raise UNAUTHORIZED_EXCEPTION(error='Incorrect password.')
+    

@@ -1,10 +1,11 @@
-from flask import Blueprint, request, jsonify, current_app
-from flaskr.db import get_db
+from flask import Blueprint, request, jsonify
 from ..error_handling.logger import logger
 
-from ..auth import auth_token, HTTP_STATUS_CODE
-from ..get_data import get_data_from_query
-from ..post_data import post_data_using_query
+from ..auth import auth_user, check_if_data_is_not_None
+from ..error_handling.exceptions import DATA_NOT_FOUND_EXCEPTION, UNAUTHORIZED_EXCEPTION, INTERNAL_ERROR_EXCEPTION
+from ..util import json_error, json_request_completed
+from ..operations_on_data.get_data import get_data_from_query
+from ..operations_on_data.post_data import post_data_using_query
 
 bp = Blueprint('/status', __name__, url_prefix='/status')
 
@@ -14,24 +15,14 @@ def add():
     color = request.json['color']
     message = request.json['message']
     
-    error, status_code = auth_token(token, [color, message], False)
-    if error is not None:
-        return jsonify({
-            "code": status_code,
-            "error": error
-        })
+    try:
+        check_if_data_is_not_None([token, color, message])
+        auth_user(token, check_for_admin_privs=False)
+        post_data_using_query("INSERT INTO status (message, color) VALUES (?, ?)", (message, color))
+    except DATA_NOT_FOUND_EXCEPTION or UNAUTHORIZED_EXCEPTION or INTERNAL_ERROR_EXCEPTION as ex:
+        return json_error(ex.error, ex.status_code)
     
-    error = post_data_using_query("INSERT INTO status (message, color) VALUES (?, ?)", (message, color))
-    
-    if error is not None:
-        return jsonify({
-            "code": HTTP_STATUS_CODE.BAD_REQUEST,
-            "error": error
-        })
-    
-    return jsonify({
-        'code': HTTP_STATUS_CODE.OK
-    })
+    return json_request_completed()
     
     
 
@@ -41,13 +32,11 @@ def get():
     offset = request.json['offset']
     size = request.json['size']
     
-    error, status_code = auth_token(token, [offset, size], False)
-    
-    if error is not None:
-        return jsonify({
-            "code": status_code,
-            "error": error
-        })
+    try:
+        check_if_data_is_not_None([token, offset, size])
+        auth_user(token, check_for_admin_privs=False)
+    except DATA_NOT_FOUND_EXCEPTION or UNAUTHORIZED_EXCEPTION as ex:
+        return json_error(ex.error, ex.status_code)
     
     return jsonify(get_data_from_query("SELECT * FROM status ORDER BY id LIMIT %s OFFSET %s;" % (size, offset)))
     
