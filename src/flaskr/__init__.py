@@ -29,7 +29,7 @@ def create_app(test_config=None):
         logger.info('Loaded configuration.')
     else:
         # load the test config if passed in
-        app.config.from_mapping(test_config)
+        app.config.from_object(test_config)
         logger.info('Loaded test configuration.')
     
     # ensure the instance config folder exists
